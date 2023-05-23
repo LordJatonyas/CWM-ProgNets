@@ -1,6 +1,7 @@
 # !/usr/bin/python3
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 def main():
     if len(sys.argv) != 2:
@@ -10,7 +11,7 @@ def main():
     number = filename[-5]
     xlabel = "time"
     ylabel = "probability"
-    title = f'CDF for Interval={10**(-number/10)}'
+    title = f'CDF for Interval={10**(-int(number) - 1)}'
     fig_name = f'ping5-{number}.png'
 
     t = np.loadtxt(filename, delimiter=" ", dtype="float")
