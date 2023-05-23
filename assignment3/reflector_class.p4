@@ -68,7 +68,7 @@ control MyIngress(inout headers hdr,
        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
        //TODO: send the packet back to the same port
        hdr.ethernet.dstAddr = tmp_mac;
-       std_meta.egress_spec = std_meta.ingress_port;
+       standard_metadata.egress_spec = standard_metadata.ingress_port;
     }
     
     action drop() {
@@ -96,8 +96,8 @@ control MyIngress(inout headers hdr,
     apply {
     	//TODO: Check if the Ethernet header is valid
 	//if so, lookup the source MAC in the table and decide what to do
-	if (hdr.ethernet.srcAddr.isValid()) {
-		src_mac_drop.apply(); }
+	if (hdr.ethernet.isValid()) {
+		src_mac_drop.apply(); 
         }
     }
 }
