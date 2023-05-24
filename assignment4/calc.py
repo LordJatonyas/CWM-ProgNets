@@ -69,7 +69,9 @@ def main():
     p = make_seq(num_parser, make_seq(op_parser,num_parser))
     s = ''
     #iface = get_if()
-    iface = "veth0-1"
+    
+    iface = "enx0c37965f8a23"
+    #iface = "veth0-1"
 
     while True:
         s = input('> ')
