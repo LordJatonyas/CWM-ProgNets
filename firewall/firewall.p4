@@ -3,7 +3,19 @@
 
 /* CONSTANTS */
 const bit<16> TYPE_IPV4 = 0x800;
-const bit<8> TYPE_TCP = 6;
+const bit<8> TYPE_UDP = 0x11;
+
+const bit<8> ZERO   = 0x30; // '0'
+const bit<8> ONE    = 0x31; // '1'
+const bit<8> TWO    = 0x32; // '2'
+const bit<8> THREE  = 0x33; // '3'
+const bit<8> FOUR   = 0x34; // '4'
+const bit<8> FIVE   = 0x35; // '5'
+const bit<8> SIX    = 0x36; // '6'
+const bit<8> SEVEN  = 0x37; // '7'
+const bit<8> EIGHT  = 0x38; // '8'
+const bit<8> NINE   = 0x39; // '9'
+const bit<8> DOT    = 0x2e; // '.'
 
 
 /* HEADERS */
@@ -32,24 +44,11 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
-header tcp_t {
+header udp_t {
     bit<16> srcPort;
-    bit<16? dstPort;
-    bit<32> seqNo;
-    bit<32> ackNo;
-    bit<4> dataOffset;
-    bit<4> res;
-    bit<1> cwr;
-    bit<1> ece;
-    bit<1> urg;
-    bit<1> ack;
-    bit<1> psh;
-    bit<1> rst;
-    bit<1> syn;
-    bit<1> fin;
-    bit<16> window;
+    bit<16> dstPort;
+    bit<16> length_;
     bit<16> checksum;
-    bit<16> urgentPtr;
 }
 
 /*
@@ -66,7 +65,7 @@ struct metadata {
 struct headers {
     ethernet_t	ethernet;
     ipv4_t	ipv4;
-    tcp_t	tcp;
+    udp_t	udp;
 }
 
 /*************************************************************************
@@ -91,13 +90,13 @@ parser MyParser(packet_in packet,
     state parse_ipv4 {
 	packet.extract(hdr.ipv4);
 	transition select(hdr.ipv4.protocol) {
-	    TYPE_TCP : tcp;
+	    TYPE_UDP : parse_udp;
 	    default : accept;
 	}
     }
 
-    state tcp {
-	packet.extract(hdr.tcp);
+    state parse_udp {
+	packet.extract(hdr.udp);
 	transition accept;
     }
 }
@@ -117,20 +116,25 @@ control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
 
+    action swap_mac_addresses() {
+	macAddr_t tmp;
+	tmp = hdr.ethernet.dstAddr;
+	hdr.ethernet.dstAddr = hdr.ethernet.srcAddr;
+	hdr.ethernet.srcAddr = tmp;
+	standard_metadata.egress_spec = standard_metadata.ingress_port;
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
 
-    action ipv4_forward(macAddr_t dst, egressSpec_t port) {
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-        hdr.ethernet.dstAddr = dst;
-        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
-        standard_metadata.egress_spec = port;
-    }
-
+    // Five-Tuple Implementation
     table ipv4_lpm {
         key = {
+	    hdr.ipv4.srcAddr: exact;
             hdr.ipv4.dstAddr: lpm;
+	    hdr.ipv4.protocol: exact;
+	    hdr.udp.srcPort: exact;
+	    hdr.udp.dstPort: exact;
         }
         actions = {
             ipv4_forward;
@@ -138,38 +142,14 @@ control MyIngress(inout headers hdr,
             NoAction;
         }
         size = 1024;
-        default_action = drop();
-    }
-
-    action set_direction(bit<1> dir) {
-        direction = dir;
-    }
-
-    table check_ports {
-        key = {
-            standard_metadata.ingress_port: exact;
-            standard_metadata.egress_spec: exact;
-        }
-        actions = {
-            set_direction;
-            NoAction;
-        }
-        size = 1024;
         default_action = NoAction();
     }
 
     apply {
-        if (hdr.ipv4.isValid()) {
+        if (hdr.ipv4.isValid() || hdr.ipv4.ttl != 0) {
             ipv4_lpm.apply();
-            if (hdr.tcp.isValid()) {
-                direction = 0;
-                if (check_ports.apply().hit) {
-                    //TODO
-                }
-            }
         }
     }
-
 }
 
 /*************************************************************************
@@ -213,7 +193,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-        packet.emit(hdr.tcp);
+        packet.emit(hdr.udp);
     }
 }
 
