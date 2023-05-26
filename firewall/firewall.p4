@@ -140,6 +140,36 @@ control MyIngress(inout headers hdr,
         size = 1024;
         default_action = drop();
     }
+
+    action set_direction(bit<1> dir) {
+        direction = dir;
+    }
+
+    table check_ports {
+        key = {
+            standard_metadata.ingress_port: exact;
+            standard_metadata.egress_spec: exact;
+        }
+        actions = {
+            set_direction;
+            NoAction;
+        }
+        size = 1024;
+        default_action = NoAction();
+    }
+
+    apply {
+        if (hdr.ipv4.isValid()) {
+            ipv4_lpm.apply();
+            if (hdr.tcp.isValid()) {
+                direction = 0;
+                if (check_ports.apply().hit) {
+                    //TODO
+                }
+            }
+        }
+    }
+
 }
 
 /*************************************************************************
