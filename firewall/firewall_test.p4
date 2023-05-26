@@ -5,9 +5,11 @@
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
+const bit<16> TYPE_IPV4 = 0x800;
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
+typedef bit<32> ip4Addr_t;
 
 header ethernet_t {
     macAddr_t dstAddr;
@@ -107,14 +109,14 @@ control MyIngress(inout headers hdr,
             drop;
             NoAction;
         }
-        size = 1024;
+        size = 65000;
         default_action = swap_mac_addresses();
     }
     
     apply {
         if (hdr.ethernet.isValid()) {
 	    if (hdr.ipv4.isValid()) {
-		src_mac_drop.apply();
+		dst_ip_drop.apply();
 	    }
         }
     }
@@ -152,6 +154,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
+	packet.emit(hdr.ipv4);
     }
 }
 

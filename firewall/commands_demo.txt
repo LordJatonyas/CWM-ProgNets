@@ -1,0 +1,4 @@
+table_add MyIngress.dst_ip_drop MyIngress.drop 208.65.153.238/32 =>
+table_add MyIngress.dst_ip_drop MyIngress.drop 208.65.153.251/32 =>
+table_add MyIngress.dst_ip_drop MyIngress.drop 208.65.153.253/32 =>
+table_add MyIngress.dst_ip_drop MyIngress.drop 208.117.236.69/32 =>
