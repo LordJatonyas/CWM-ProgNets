@@ -5,9 +5,6 @@
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<8> TYPE_TCP = 6;
 
-#define BLOOM_FILTER_ENTRIES 4096
-#define BLOOM_FILTER_BIT_WIDTH 1
-
 
 /* HEADERS */
 typedef bit<9> egressSpec_t;
@@ -119,47 +116,29 @@ control MyVerifyChecksum(inout headers hdr,
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
-    action send_back(bit<32> result) {
-	 hdr.p4calc.res = result;
-	 bit<48> tmp;
-	 tmp = hdr.ethernet.srcAddr;
-	 hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-	 hdr.ethernet.dstAddr = tmp;
-	 standard_metadata.egress_spec = standard_metadata.ingress_port;
-    }
 
-    action operation_drop() {
+    action drop() {
         mark_to_drop(standard_metadata);
     }
 
-    table calculate {
-        key = {
-            hdr.p4calc.op        : exact;
-        }
-        actions = {
-            operation_add;
-            operation_sub;
-            operation_and;
-            operation_or;
-            operation_xor;
-            operation_drop;
-        }
-        const default_action = operation_drop();
-        const entries = {
-            P4CALC_PLUS : operation_add();
-            P4CALC_MINUS: operation_sub();
-            P4CALC_AND  : operation_and();
-            P4CALC_OR   : operation_or();
-            P4CALC_CARET: operation_xor();
-        }
+    action ipv4_forward(macAddr_t dst, egressSpec_t port) {
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = dst;
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+        standard_metadata.egress_spec = port;
     }
 
-    apply {
-        if (hdr.p4calc.isValid()) {
-            calculate.apply();
-        } else {
-            operation_drop();
+    table ipv4_lpm {
+        key = {
+            hdr.ipv4.dstAddr: lpm;
         }
+        actions = {
+            ipv4_forward;
+            drop;
+            NoAction;
+        }
+        size = 1024;
+        default_action = drop();
     }
 }
 
@@ -181,18 +160,19 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 	update_checksum(
 	    hdr.ipv4.isValid(),
 	    { hdr.ipv4.version,
-              hdr.ipv4.ihl,
-              hdr.ipv4.diffserv,
-              hdr.ipv4.totalLen,
-              hdr.ipv4.identification,
-              hdr.ipv4.flags,
-              hdr.ipv4.fragOffset,
-              hdr.ipv4.ttl,
-              hdr.ipv4.protocol,
-              hdr.ipv4.srcAddr,
-              hdr.ipv4.dstAddr },
-            hdr.ipv4.hdrChecksum,
-            HashAlgorithm.csum16);
+          hdr.ipv4.ihl,
+          hdr.ipv4.diffserv,
+          hdr.ipv4.totalLen,
+          hdr.ipv4.identification,
+          hdr.ipv4.flags,
+          hdr.ipv4.fragOffset,
+          hdr.ipv4.ttl,
+          hdr.ipv4.protocol,
+          hdr.ipv4.srcAddr,
+          hdr.ipv4.dstAddr
+        },
+        hdr.ipv4.hdrChecksum,
+        HashAlgorithm.csum16);
 	}
 }
 
@@ -203,12 +183,12 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-	packet.emit(hdr.tcp);
+        packet.emit(hdr.tcp);
     }
 }
 
 /*************************************************************************
- ***********************  S W I T T C H **********************************
+ ***********************  S W I T C H **********************************
  *************************************************************************/
 
 V1Switch(
